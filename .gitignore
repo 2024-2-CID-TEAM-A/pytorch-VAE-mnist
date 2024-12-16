@@ -256,6 +256,7 @@ checkpoint
 data
 runs
 generated
+generated_imgs
 ground_truth
 recon
 
