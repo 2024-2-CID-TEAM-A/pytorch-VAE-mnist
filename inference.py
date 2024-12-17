@@ -1,11 +1,6 @@
 import os
 import torch
 import torch.nn as nn
-import torch.nn.parallel
-import torch.backends.cudnn as cudnn
-import torch.utils.data
-import torchvision.transforms as transforms
-import torchvision.datasets as dset
 import torch.nn.functional as F
 from torchvision.utils import save_image
 
@@ -17,29 +12,12 @@ INITIAL_CHANNEL = 4
 Z_DIM = 16
 seed = 1
 
-CUDA = CUDA and torch.cuda.is_available()
-print("PyTorch version: {}".format(torch.__version__))
-if CUDA:
-    print("CUDA version: {}\n".format(torch.version.cuda))
+device = torch.device("cuda" if CUDA and torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
 
 if CUDA:
     torch.cuda.manual_seed(seed)
-device = torch.device("cuda" if CUDA else "cpu")
-cudnn.benchmark = True
-
-dataset = dset.MNIST(
-    root=DATA_PATH,
-    download=True,
-    transform=transforms.Compose(
-        [
-            transforms.ToTensor(),
-        ]
-    ),
-)
-
-VAEdataloader = torch.utils.data.DataLoader(
-    dataset, batch_size=BATCH_SIZE, shuffle=True
-)
+torch.backends.cudnn.benchmark = True
 
 
 class Flatten(nn.Module):
@@ -64,12 +42,12 @@ class VAE(nn.Module):
 
         self.encoder = nn.Sequential(
             nn.Conv2d(
-                image_channels, output_channels, kernel_size=3, stride=2, padding=1
+                image_channels, output_channels, kernel_size=4, stride=2, padding=1
             ),
             nn.BatchNorm2d(output_channels),
             nn.ReLU(),
             nn.Conv2d(
-                output_channels, output_channels * 2, kernel_size=3, stride=2, padding=1
+                output_channels, output_channels * 2, kernel_size=4, stride=2, padding=1
             ),
             nn.BatchNorm2d(output_channels * 2),
             nn.ReLU(),
@@ -82,14 +60,10 @@ class VAE(nn.Module):
 
         self.decoder = nn.Sequential(
             UnFlatten(),
-            nn.ConvTranspose2d(
-                8, 4, kernel_size=3, stride=2, padding=1, output_padding=1
-            ),
+            nn.ConvTranspose2d(8, 4, kernel_size=4, stride=2, padding=1),
             nn.BatchNorm2d(4),
             nn.ReLU(),
-            nn.ConvTranspose2d(
-                4, image_channels, kernel_size=3, stride=2, padding=1, output_padding=1
-            ),
+            nn.ConvTranspose2d(4, image_channels, kernel_size=4, stride=2, padding=1),
             nn.Sigmoid(),
         )
 
@@ -121,14 +95,28 @@ class VAE(nn.Module):
         return recon, mu, logvar
 
 
-model = torch.load("./checkpoint/vae_mnist_28x28.pth", map_location=device)
+model_path = "./checkpoint/vae_mnist_28x28.pth"
+assert os.path.exists(model_path), f"Model file not found: {model_path}"
+model = torch.load(model_path, map_location=device)
+model.eval()
+
+from torchvision import transforms, datasets
+
+dataset = datasets.MNIST(
+    root=DATA_PATH,
+    download=True,
+    transform=transforms.Compose([transforms.ToTensor()]),
+)
+dataloader = torch.utils.data.DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
 
 with torch.no_grad():
-    images, label = next(iter(VAEdataloader))
+    images, label = next(iter(dataloader))
     images = images.float().to(device)
 
+    # Reconstructed images
     recon, _, _ = model(images)
 
+    # Random noise generation
     noise = torch.randn_like(images).to(device)
     generated, _, _ = model(noise)
 
@@ -140,5 +128,8 @@ with torch.no_grad():
     os.makedirs(save_recon_path, exist_ok=True)
 
     save_image(images, os.path.join(save_gt_path, "vae_mnist_28x28.png"))
-    save_image(generated, os.path.join(save_generated_path, "vae_mnist_28x28.png"))
+    save_image(
+        generated,
+        os.path.join(save_generated_path, "vae_mnist_28x28.png"),
+    )
     save_image(recon, os.path.join(save_recon_path, "vae_mnist_28x28.png"))

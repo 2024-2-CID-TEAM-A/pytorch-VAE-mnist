@@ -32,15 +32,16 @@ class UnFlatten(nn.Module):
 class VAE(nn.Module):
     def __init__(self, image_channels=IMAGE_CHANNEL, output_channels=4, z_dim=Z_DIM):
         super(VAE, self).__init__()
-        h_dim = 392
+        h_dim = 8 * 7 * 7  # 392
+
         self.encoder = nn.Sequential(
             nn.Conv2d(
-                image_channels, output_channels, kernel_size=3, stride=2, padding=1
+                image_channels, output_channels, kernel_size=4, stride=2, padding=1
             ),
             nn.BatchNorm2d(output_channels),
             nn.ReLU(),
             nn.Conv2d(
-                output_channels, output_channels * 2, kernel_size=3, stride=2, padding=1
+                output_channels, output_channels * 2, kernel_size=4, stride=2, padding=1
             ),
             nn.BatchNorm2d(output_channels * 2),
             nn.ReLU(),
@@ -53,14 +54,10 @@ class VAE(nn.Module):
 
         self.decoder = nn.Sequential(
             UnFlatten(),
-            nn.ConvTranspose2d(
-                8, 4, kernel_size=3, stride=2, padding=1, output_padding=1
-            ),
+            nn.ConvTranspose2d(8, 4, kernel_size=4, stride=2, padding=1),
             nn.BatchNorm2d(4),
             nn.ReLU(),
-            nn.ConvTranspose2d(
-                4, image_channels, kernel_size=3, stride=2, padding=1, output_padding=1
-            ),
+            nn.ConvTranspose2d(4, image_channels, kernel_size=4, stride=2, padding=1),
             nn.Sigmoid(),
         )
 
